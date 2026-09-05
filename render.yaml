@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: vartule-ai-assistant-backend
+    name: vartule-ai-api
     runtime: node
     rootDir: backend
     buildCommand: npm ci
@@ -27,7 +27,7 @@ services:
         sync: false
 
   - type: web
-    name: vartule-ai-assistant
+    name: vartule-ai-web
     runtime: static
     rootDir: frontend
     buildCommand: npm ci && npm run build

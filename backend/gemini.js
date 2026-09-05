@@ -1,14 +1,10 @@
 import axios from "axios"
-
-const cleanEnvValue = (value) => value?.trim().replace(/^['"]|['"]$/g, "")
-
 const geminiResponse=async (command,assistantName,userName)=>{
 try {
-    const legacyUrlOrKey=cleanEnvValue(process.env.GEMINI_API_URL)
-    const apiKey=cleanEnvValue(process.env.GEMINI_API_KEY) || (legacyUrlOrKey && !legacyUrlOrKey.startsWith("http") ? legacyUrlOrKey : undefined)
-    const configuredModel=cleanEnvValue(process.env.GEMINI_MODEL)
-    // Gemini 2.0 Flash is shut down. Do not replace other configured models:
-    // Render may have a valid newer model configured for this API key.
+    const legacyUrlOrKey=process.env.GEMINI_API_URL
+    const apiKey=process.env.GEMINI_API_KEY || (legacyUrlOrKey && !legacyUrlOrKey.startsWith("http") ? legacyUrlOrKey : undefined)
+    const configuredModel=process.env.GEMINI_MODEL
+    // Keep older .env files working with the currently supported Flash model.
     const model=configuredModel === "gemini-2.0-flash" ? "gemini-3.6-flash" : (configuredModel || "gemini-3.6-flash")
     // Prefer the explicit API key and model. Older projects may have a full
     // GEMINI_API_URL pointing at a retired or quota-exhausted model.
@@ -67,9 +63,7 @@ now your userInput- ${command}
     "parts":[{"text": prompt}]
     }]
     }, apiKey ? { headers: { "x-goog-api-key": apiKey } } : undefined)
-    const text=result.data?.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) throw new Error("Gemini returned no usable response")
-    return text
+return result.data.candidates[0].content.parts[0].text
 } catch (error) {
     throw new Error(`Gemini request failed: ${error.response?.data?.error?.message || error.message}`)
 }
