@@ -112,6 +112,8 @@ export const askToAssistant=async (req,res)=>{
   console.error("Assistant request failed:", error)
   const response = error.message.includes("Gemini API is not configured")
     ? "Gemini API is not configured. Add GEMINI_API_KEY in Render Environment."
+    : error.message.toLowerCase().includes("quota") || error.message.includes("429")
+      ? "Gemini is temporarily busy. Please wait one minute and try again."
     : `Assistant service error: ${error.message}`
   return res.status(500).json({ response })
 }

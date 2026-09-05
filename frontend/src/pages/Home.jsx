@@ -89,6 +89,35 @@ synth.speak(utterence);
     if (!newTab) window.location.assign(url);
   }, [])
 
+  const getLocalCommand = useCallback((command) => {
+    const text = command.toLowerCase();
+    const wantsOpen = /\bopen\b|ओपन|खोल/.test(text);
+    const result = (type, userInput, response) => ({ type, userInput, response });
+
+    if (wantsOpen && /youtube|you tube|यूट्यूब|युटुब/.test(text)) {
+      return result("youtube-search", "", "Opening YouTube");
+    }
+    if (wantsOpen && /instagram|इंस्टाग्राम/.test(text)) {
+      return result("instagram-open", "", "Opening Instagram");
+    }
+    if (wantsOpen && /facebook|फेसबुक/.test(text)) {
+      return result("facebook-open", "", "Opening Facebook");
+    }
+    if (wantsOpen && /google|गूगल/.test(text)) {
+      return result("google-search", "", "Opening Google");
+    }
+    if (wantsOpen && /calculator|कैलकुलेटर/.test(text)) {
+      return result("calculator-open", "", "Opening calculator");
+    }
+    if (/\btime\b|समय|टाइम/.test(text)) {
+      return result("get-time", command, `Current time is ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+    }
+    if (/\bdate\b|तारीख|डेट/.test(text)) {
+      return result("get-date", command, `Today's date is ${new Date().toLocaleDateString()}`);
+    }
+    return null;
+  }, [])
+
   const handleCommand = useCallback((data, spokenCommand = "") => {
     const {type,userInput,response,targetUrl}=data
     const normalizedCommand = spokenCommand.toLowerCase();
@@ -215,7 +244,9 @@ useEffect(() => {
       recognition.stop();
       setListening(false);
       try {
-        const data = await getGeminiResponse(transcript);
+        // Simple device/web actions do not need an AI request. This keeps the
+        // assistant useful even when the Gemini free-tier quota is exhausted.
+        const data = getLocalCommand(transcript) || await getGeminiResponse(transcript);
         if (!data?.response) throw new Error("Invalid assistant response");
         handleCommand(data, transcript);
         setAiText(data.response);
@@ -236,7 +267,7 @@ useEffect(() => {
     setListening(false);
     isRecognizingRef.current = false;
   };
-}, [getGeminiResponse, handleCommand, startRecognition]);
+}, [getGeminiResponse, getLocalCommand, handleCommand, startRecognition]);
 
 
 
