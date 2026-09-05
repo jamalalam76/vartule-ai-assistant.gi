@@ -2,7 +2,7 @@ import axios from 'axios'
 import { useCallback, useEffect, useState } from 'react'
 import { userDataContext as UserDataContext } from './userDataContext'
 function UserContext({children}) {
-    const serverUrl=import.meta.env.VITE_API_URL || "http://localhost:8080"
+    const serverUrl=import.meta.env.VITE_API_URL || "https://vartule-ai-assistant-backend.onrender.com"
     const [userData,setUserData]=useState(null)
     const [frontendImage,setFrontendImage]=useState(null)
      const [backendImage,setBackendImage]=useState(null)
