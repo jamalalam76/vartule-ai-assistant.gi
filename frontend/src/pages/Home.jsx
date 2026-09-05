@@ -13,12 +13,14 @@ function Home() {
   const [userText,setUserText]=useState("")
   const [aiText,setAiText]=useState("")
   const [assistantStarted,setAssistantStarted]=useState(false)
+  const [recognitionError,setRecognitionError]=useState("")
   const isSpeakingRef=useRef(false)
   const recognitionRef=useRef(null)
   const isProcessingRef=useRef(false)
   const restartTimeoutRef=useRef(null)
   const speechRequestRef=useRef(0)
   const assistantStartedRef=useRef(false)
+  const shouldRestartRef=useRef(true)
   const [ham,setHam]=useState(false)
   const isRecognizingRef=useRef(false)
   const synth=window.speechSynthesis
@@ -76,9 +78,17 @@ synth.speak(utterence);
 
   const startAssistant = useCallback(() => {
     assistantStartedRef.current = true;
+    shouldRestartRef.current = true;
     setAssistantStarted(true);
+    setRecognitionError("");
     speak(`Hello ${userData?.name || "there"}, what can I help you with?`);
   }, [speak, userData?.name])
+
+  const resumeListening = useCallback(() => {
+    shouldRestartRef.current = true;
+    setRecognitionError("");
+    startRecognition();
+  }, [startRecognition])
 
   const openExternal = useCallback((url) => {
     const newTab = window.open(url, '_blank');
@@ -162,7 +172,7 @@ useEffect(() => {
 
   const scheduleRestart = () => {
     clearTimeout(restartTimeoutRef.current);
-    if (!isMounted || isSpeakingRef.current || isProcessingRef.current) return;
+    if (!isMounted || !shouldRestartRef.current || isSpeakingRef.current || isProcessingRef.current) return;
     restartTimeoutRef.current = setTimeout(startRecognition, 800);
   };
 
@@ -178,14 +188,22 @@ useEffect(() => {
   };
 
   recognition.onerror = (event) => {
-    console.warn("Recognition error:", event.error);
+    if (event.error !== "aborted") console.warn("Recognition error:", event.error);
     isRecognizingRef.current = false;
     setListening(false);
+    if (event.error === "aborted") {
+      // Do not call start() again after a browser-aborted session. Repeating
+      // it immediately creates the endless aborted-error loop.
+      shouldRestartRef.current = false;
+      setRecognitionError("Voice recognition stopped. Tap Resume Listening to try again.");
+      return;
+    }
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      shouldRestartRef.current = false;
       setAiText("Microphone access is blocked. Please allow microphone permission and reload the page.");
       return;
     }
-    if (event.error !== "aborted") scheduleRestart();
+    scheduleRestart();
   };
 
   recognition.onresult = async (e) => {
@@ -256,8 +274,9 @@ useEffect(() => {
 <img src={userData?.assistantImage} alt="" className='h-full object-cover'/>
       </div>
       <h1 className='text-white text-[18px] font-semibold'>I'm {userData?.assistantName}</h1>
-      <p className='text-gray-300 text-sm'>{listening ? "Listening..." : assistantStarted ? "Waiting for your command" : "Start the assistant to enable voice commands"}</p>
+      <p className='text-gray-300 text-sm'>{listening ? "Listening..." : recognitionError || (assistantStarted ? "Waiting for your command" : "Start the assistant to enable voice commands")}</p>
       {!assistantStarted && <button className='min-w-[180px] h-[52px] text-black font-semibold bg-white rounded-full cursor-pointer text-[17px]' onClick={startAssistant}>Start Assistant</button>}
+      {assistantStarted && recognitionError && <button className='min-w-[180px] h-[52px] text-black font-semibold bg-white rounded-full cursor-pointer text-[17px]' onClick={resumeListening}>Resume Listening</button>}
       {!aiText && <img src={userImg} alt="" className='w-[200px]'/>}
       {aiText && <img src={aiImg} alt="" className='w-[200px]'/>}
     
