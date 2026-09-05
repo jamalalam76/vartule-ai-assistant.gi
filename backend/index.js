@@ -31,6 +31,7 @@ app.use(cors({
 const port=process.env.PORT || 5000
 app.use(express.json())
 app.use(cookieParser())
+app.get("/", (_req, res) => res.status(200).json({ status: "ok", service: "Vartule AI Assistant API" }))
 app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }))
 app.use("/api/auth",authRouter)
 app.use("/api/user",userRouter)
