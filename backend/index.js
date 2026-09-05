@@ -13,9 +13,11 @@ import userRouter from "./routes/user.routes.js"
 
 
 const app=express()
+const deployedFrontendUrl = "https://vartule-ai-assistant.onrender.com"
 const allowedOrigins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    deployedFrontendUrl,
     ...((process.env.FRONTEND_URL || "").split(",").map((url) => url.trim()).filter(Boolean)),
 ]
 app.use(cors({
