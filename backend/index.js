@@ -13,13 +13,23 @@ import userRouter from "./routes/user.routes.js"
 
 
 const app=express()
+const allowedOrigins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    ...((process.env.FRONTEND_URL || "").split(",").map((url) => url.trim()).filter(Boolean)),
+]
 app.use(cors({
-    origin:["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin(origin, callback) {
+        // Requests without an Origin header are server-to-server/health checks.
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+        return callback(new Error("Origin is not allowed by CORS"))
+    },
     credentials:true
 }))
 const port=process.env.PORT || 5000
 app.use(express.json())
 app.use(cookieParser())
+app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }))
 app.use("/api/auth",authRouter)
 app.use("/api/user",userRouter)
 
