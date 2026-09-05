@@ -21,6 +21,7 @@ function Home() {
   const assistantStartedRef=useRef(false)
   const [ham,setHam]=useState(false)
   const isRecognizingRef=useRef(false)
+  const stoppingRecognitionRef=useRef(false)
   const synth=window.speechSynthesis
 
   const handleLogOut=async ()=>{
@@ -174,13 +175,21 @@ useEffect(() => {
   recognition.onend = () => {
     isRecognizingRef.current = false;
     setListening(false);
+    const wasIntentionalStop = stoppingRecognitionRef.current;
+    stoppingRecognitionRef.current = false;
+    // A final command deliberately stops recognition while the response is
+    // processed/spoken. Speech completion restarts it at the right time.
+    if (wasIntentionalStop) return;
     scheduleRestart();
   };
 
   recognition.onerror = (event) => {
-    console.warn("Recognition error:", event.error);
     isRecognizingRef.current = false;
     setListening(false);
+    // Chrome emits "aborted" after our own recognition.stop(). It is expected
+    // and must not trigger another competing restart.
+    if (event.error === "aborted") return;
+    console.warn("Recognition error:", event.error);
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       setAiText("Microphone access is blocked. Please allow microphone permission and reload the page.");
       return;
@@ -202,8 +211,8 @@ useEffect(() => {
       clearTimeout(restartTimeoutRef.current);
       setAiText("");
       setUserText(transcript);
+      stoppingRecognitionRef.current = true;
       recognition.stop();
-      isRecognizingRef.current = false;
       setListening(false);
       try {
         const data = await getGeminiResponse(transcript);
@@ -222,6 +231,7 @@ useEffect(() => {
   return () => {
     isMounted = false;
     clearTimeout(restartTimeoutRef.current);
+    stoppingRecognitionRef.current = true;
     recognition.stop();
     setListening(false);
     isRecognizingRef.current = false;
