@@ -172,19 +172,24 @@ export const askToAssistant = async (req, res) => {
          case "instagram-open":
          case "facebook-open":
          case "weather-show":
+         case "website-open":
 
             return res.json({
                type,
-               userInput: gemResult.userInput,
-               response: gemResult.response
+               userInput: gemResult.userInput || command,
+               response: gemResult.response || "Sure, processing your request.",
+               targetUrl: gemResult.targetUrl
             })
 
          default:
 
             console.log("Unknown Gemini type:", type)
 
-            return res.status(400).json({
-               response: "I didn't understand that command."
+            return res.json({
+               type: type || "general",
+               userInput: gemResult.userInput || command,
+               response: gemResult.response || "I didn't understand that command.",
+               targetUrl: gemResult.targetUrl
             })
       }
 
