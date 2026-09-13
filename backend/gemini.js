@@ -5,20 +5,11 @@ const geminiResponse = async (command, assistantName, userName) => {
     const legacyUrlOrKey = process.env.GEMINI_API_URL
     const apiKey = process.env.GEMINI_API_KEY || (legacyUrlOrKey && !legacyUrlOrKey.startsWith("http") ? legacyUrlOrKey : undefined)
     
-    let configuredModel = process.env.GEMINI_MODEL
-    if (!configuredModel || configuredModel.includes("3.6") || configuredModel.includes("3.7")) {
-      configuredModel = "gemini-1.5-flash"
-    }
-    const model = configuredModel
+    let configuredModel = process.env.GEMINI_MODEL || "gemini-3.6-flash"
     
-    let apiUrl = (apiKey && `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`) || (legacyUrlOrKey?.startsWith("http") ? legacyUrlOrKey : undefined)
-    if (apiUrl && apiUrl.includes("gemini-3.")) {
-      apiUrl = apiUrl.replace(/gemini-3\.[0-9]-flash/g, "gemini-1.5-flash")
-    }
-
-    if (!apiUrl) {
-      throw new Error("Gemini API is not configured. Add GEMINI_API_KEY or GEMINI_API_URL to backend/.env")
-    }
+    // Priority model list to ensure maximum availability
+    const modelsToTry = [configuredModel, "gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash"]
+    const uniqueModels = [...new Set(modelsToTry.filter(Boolean))]
 
     const prompt = `You are a virtual assistant named ${assistantName} created by ${userName}. 
 You are not Google. You will now behave like a voice-enabled assistant.
@@ -59,25 +50,34 @@ Important:
 now your userInput- ${command}
 `;
 
-    const requestUrl = apiKey ? `${apiUrl}?key=${apiKey}` : apiUrl
-    const result = await axios.post(
-      requestUrl,
-      {
-        contents: [
+    let lastError = null
+    for (const model of uniqueModels) {
+      try {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+        const requestUrl = apiKey ? `${apiUrl}?key=${apiKey}` : apiUrl
+        const result = await axios.post(
+          requestUrl,
           {
-            parts: [{ text: prompt }]
-          }
-        ]
-      },
-      apiKey ? { headers: { "Content-Type": "application/json" } } : undefined
-    )
+            contents: [
+              {
+                parts: [{ text: prompt }]
+              }
+            ]
+          },
+          { headers: { "Content-Type": "application/json" } }
+        )
 
-    const textResponse = result.data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!textResponse) {
-      throw new Error("Empty response received from Gemini API")
+        const textResponse = result.data.candidates?.[0]?.content?.parts?.[0]?.text
+        if (textResponse) {
+          return textResponse
+        }
+      } catch (err) {
+        lastError = err
+        console.warn(`Model ${model} failed, trying next fallback...`, err.response?.data?.error?.message || err.message)
+      }
     }
 
-    return textResponse
+    throw lastError || new Error("All Gemini models failed")
   } catch (error) {
     console.error("Gemini API Error Detail:", error.response?.data || error.message)
     throw new Error(`Gemini request failed: ${error.response?.data?.error?.message || error.message}`)
