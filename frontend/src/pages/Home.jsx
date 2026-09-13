@@ -6,6 +6,7 @@ import aiImg from "../assets/ai.gif"
 import { CgMenuRight } from "react-icons/cg";
 import { RxCross1 } from "react-icons/rx";
 import userImg from "../assets/user.gif"
+
 function Home() {
   const {userData,serverUrl,setUserData,getGeminiResponse}=useContext(userDataContext)
   const navigate=useNavigate()
@@ -19,6 +20,7 @@ function Home() {
   const restartTimeoutRef=useRef(null)
   const speechRequestRef=useRef(0)
   const assistantStartedRef=useRef(false)
+  const lastErrorRef=useRef(null)
   const [ham,setHam]=useState(false)
   const isRecognizingRef=useRef(false)
   const synth=window.speechSynthesis
@@ -35,7 +37,6 @@ function Home() {
   }
 
   const startRecognition = useCallback(() => {
-    
    if (assistantStartedRef.current && !isSpeakingRef.current && !isProcessingRef.current && !isRecognizingRef.current) {
     try {
       recognitionRef.current?.start();
@@ -46,7 +47,6 @@ function Home() {
       }
     }
   }
-    
   }, [])
 
   const speak = useCallback((text) => {
@@ -59,22 +59,27 @@ function Home() {
       utterence.voice = hindiVoice;
     }
 
-
     isSpeakingRef.current=true
     utterence.onend=()=>{
       if (requestId !== speechRequestRef.current) return;
-        setAiText("");
-  isSpeakingRef.current = false;
-  isProcessingRef.current = false;
-  restartTimeoutRef.current = setTimeout(() => {
-    startRecognition(); // ⏳ Delay se race condition avoid hoti hai
-  }, 800);
+      setAiText("");
+      isSpeakingRef.current = false;
+      isProcessingRef.current = false;
+      restartTimeoutRef.current = setTimeout(() => {
+        startRecognition();
+      }, 800);
     }
-   synth.cancel(); // 🛑 pehle se koi speech ho to band karo
-synth.speak(utterence);
+    utterence.onerror = () => {
+      isSpeakingRef.current = false;
+      isProcessingRef.current = false;
+    }
+
+    synth.cancel();
+    synth.speak(utterence);
   }, [startRecognition, synth])
 
   const startAssistant = useCallback(() => {
+    lastErrorRef.current = null;
     assistantStartedRef.current = true;
     setAssistantStarted(true);
     speak(`Hello ${userData?.name || "there"}, what can I help you with?`);
@@ -83,8 +88,6 @@ synth.speak(utterence);
   const openExternal = useCallback((url) => {
     const newTab = window.open(url, '_blank');
     if (newTab) newTab.opener = null;
-    // Speech-recognition callbacks are not always treated as a browser user
-    // gesture, so popup blockers can reject window.open. Still open the command.
     if (!newTab) window.location.assign(url);
   }, [])
 
@@ -122,17 +125,16 @@ synth.speak(utterence);
       const query = encodeURIComponent(userInput);
       openExternal(`https://www.google.com/search?q=${query}`);
     }
-     if (type === 'calculator-open') {
-  
+    if (type === 'calculator-open') {
       openExternal(`https://www.google.com/search?q=calculator`);
     }
-     if (type === "instagram-open") {
+    if (type === "instagram-open") {
       openExternal(`https://www.instagram.com/`);
     }
     if (type ==="facebook-open") {
       openExternal(`https://www.facebook.com/`);
     }
-     if (type ==="weather-show") {
+    if (type ==="weather-show") {
       openExternal(`https://www.google.com/search?q=weather`);
     }
 
@@ -152,7 +154,6 @@ useEffect(() => {
   const recognition = new SpeechRecognition();
 
   recognition.continuous = true;
-  // The assistant is primarily used with Hindi/Hinglish voice commands.
   recognition.lang = 'hi-IN';
   recognition.interimResults = false;
 
@@ -174,18 +175,21 @@ useEffect(() => {
   recognition.onend = () => {
     isRecognizingRef.current = false;
     setListening(false);
-    scheduleRestart();
+    const err = lastErrorRef.current;
+    lastErrorRef.current = null;
+    if (err !== "aborted" && err !== "not-allowed" && err !== "service-not-allowed") {
+      scheduleRestart();
+    }
   };
 
   recognition.onerror = (event) => {
     console.warn("Recognition error:", event.error);
+    lastErrorRef.current = event.error;
     isRecognizingRef.current = false;
     setListening(false);
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       setAiText("Microphone access is blocked. Please allow microphone permission and reload the page.");
-      return;
     }
-    if (event.error !== "aborted") scheduleRestart();
   };
 
   recognition.onresult = async (e) => {
@@ -196,40 +200,42 @@ useEffect(() => {
     if (!transcript || isProcessingRef.current) return;
 
     console.log("Voice command received:", transcript);
-    // Respond to every final command. Requiring an exact wake-word made normal
-    // Hindi/Hinglish requests appear to be ignored.
     isProcessingRef.current = true;
-      clearTimeout(restartTimeoutRef.current);
-      setAiText("");
-      setUserText(transcript);
+    clearTimeout(restartTimeoutRef.current);
+    setAiText("");
+    setUserText(transcript);
+    try {
       recognition.stop();
-      isRecognizingRef.current = false;
-      setListening(false);
-      try {
-        const data = await getGeminiResponse(transcript);
-        if (!data?.response) throw new Error("Invalid assistant response");
-        handleCommand(data, transcript);
-        setAiText(data.response);
-      } catch (error) {
-        setAiText(error.message || "Assistant service is unavailable. Please try again.");
-        isProcessingRef.current = false;
-        scheduleRestart();
-      }
+    } catch {
+      // ignore
+    }
+    isRecognizingRef.current = false;
+    setListening(false);
+    try {
+      const data = await getGeminiResponse(transcript);
+      if (!data?.response) throw new Error("Invalid assistant response");
+      handleCommand(data, transcript);
+      setAiText(data.response);
+    } catch (error) {
+      setAiText(error.message || "Assistant service is unavailable. Please try again.");
+      isProcessingRef.current = false;
+      scheduleRestart();
+    }
     setUserText("");
   };
-
 
   return () => {
     isMounted = false;
     clearTimeout(restartTimeoutRef.current);
-    recognition.stop();
+    try {
+      recognition.stop();
+    } catch {
+      // ignore
+    }
     setListening(false);
     isRecognizingRef.current = false;
   };
 }, [getGeminiResponse, handleCommand, startRecognition]);
-
-
-
 
   return (
     <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px] overflow-hidden'>
