@@ -95,9 +95,9 @@ function Home() {
     const {type,userInput,response,targetUrl}=data
     const normalizedCommand = spokenCommand.toLowerCase();
     const wantsToOpenYouTube = /youtube|you tube|यूट्यूब|युटुब/.test(normalizedCommand)
-      && /open|खोल|ओपन/.test(normalizedCommand);
+      && /open|khola|khol|ओपन/.test(normalizedCommand);
     const wantsToOpenGoogle = /google|गूगल/.test(normalizedCommand)
-      && /open|खोल|ओपन/.test(normalizedCommand);
+      && /open|khola|khol|ओपन/.test(normalizedCommand);
 
     speak(response);
 
@@ -112,17 +112,18 @@ function Home() {
 
     if (type === 'website-open') {
       try {
-        const url = new URL(targetUrl);
-        if (url.protocol === 'https:') openExternal(url.href);
-        else throw new Error('Only HTTPS URLs are allowed');
+        const urlToOpen = targetUrl || `https://www.google.com/search?q=${encodeURIComponent(userInput || spokenCommand)}`;
+        const url = new URL(urlToOpen);
+        if (url.protocol === 'https:' || url.protocol === 'http:') openExternal(url.href);
+        else throw new Error('Only valid HTTP/HTTPS URLs allowed');
       } catch {
-        setAiText('I could not find a safe website link for that service.');
+        openExternal(`https://www.google.com/search?q=${encodeURIComponent(userInput || spokenCommand)}`);
       }
       return;
     }
     
     if (type === 'google-search') {
-      const query = encodeURIComponent(userInput);
+      const query = encodeURIComponent(userInput || spokenCommand);
       openExternal(`https://www.google.com/search?q=${query}`);
     }
     if (type === 'calculator-open') {
@@ -139,7 +140,7 @@ function Home() {
     }
 
     if (type === 'youtube-search' || type === 'youtube-play') {
-      const query = encodeURIComponent(userInput);
+      const query = encodeURIComponent(userInput || spokenCommand);
       openExternal(`https://www.youtube.com/results?search_query=${query}`);
     }
 
@@ -199,7 +200,19 @@ useEffect(() => {
     const transcript = result[0].transcript.trim();
     if (!transcript || isProcessingRef.current) return;
 
-    console.log("Voice command received:", transcript);
+    const assistantName = userData?.assistantName?.toLowerCase() || "jarvis";
+    const lowerTranscript = transcript.toLowerCase();
+
+    // Check if transcript contains assistant name ("Jarvis" or custom assistant name)
+    const hasWakeWord = lowerTranscript.includes(assistantName) || lowerTranscript.includes("jarvis") || lowerTranscript.includes("जार्विस");
+
+    if (!hasWakeWord) {
+      console.log(`Ignored background audio (say "${userData?.assistantName || "Jarvis"}"):`, transcript);
+      scheduleRestart();
+      return;
+    }
+
+    console.log("Wake-word detected! Voice command received:", transcript);
     isProcessingRef.current = true;
     clearTimeout(restartTimeoutRef.current);
     setAiText("");
@@ -235,7 +248,7 @@ useEffect(() => {
     setListening(false);
     isRecognizingRef.current = false;
   };
-}, [getGeminiResponse, handleCommand, startRecognition]);
+}, [getGeminiResponse, handleCommand, startRecognition, userData?.assistantName]);
 
   return (
     <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px] overflow-hidden'>
