@@ -13,6 +13,7 @@ function App() {
   return (
    <Routes>
      <Route path='/' element={(userData?.assistantImage && userData?.assistantName)? <Home/> :<Navigate to={"/customize"}/>}/>
+     {/* <Route path='/' element={(userData?.assistantImage && userData?.assistantName)? <Home2/> :<Navigate to={"/customize"}/>}/> */}
     <Route path='/signup' element={!userData?<SignUp/>:<Navigate to={"/"}/>}/>
      <Route path='/signin' element={!userData?<SignIn/>:<Navigate to={"/"}/>}/>
       <Route path='/customize' element={userData?<Customize/>:<Navigate to={"/signin"}/>}/>

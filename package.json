@@ -1,0 +1,11 @@
+{
+  "name": "vartule-ai-assistant",
+  "version": "1.0.0",
+  "description": "Vartule AI Voice & Text Assistant",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev"
+  },
+  "author": "jamal ashraf",
+  "license": "ISC"
+}
