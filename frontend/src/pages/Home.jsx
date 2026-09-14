@@ -162,10 +162,10 @@ useEffect(() => {
 
   let isMounted = true;
 
-  const scheduleRestart = () => {
+  const scheduleRestart = (delay = 800) => {
     clearTimeout(restartTimeoutRef.current);
     if (!isMounted || isSpeakingRef.current || isProcessingRef.current) return;
-    restartTimeoutRef.current = setTimeout(startRecognition, 800);
+    restartTimeoutRef.current = setTimeout(startRecognition, delay);
   };
 
   recognition.onstart = () => {
@@ -178,8 +178,10 @@ useEffect(() => {
     setListening(false);
     const err = lastErrorRef.current;
     lastErrorRef.current = null;
-    if (err !== "aborted" && err !== "not-allowed" && err !== "service-not-allowed") {
-      scheduleRestart();
+    if (err === "network") {
+      scheduleRestart(2500);
+    } else if (err !== "aborted" && err !== "not-allowed" && err !== "service-not-allowed") {
+      scheduleRestart(800);
     }
   };
 
@@ -190,6 +192,8 @@ useEffect(() => {
     setListening(false);
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       setAiText("Microphone access is blocked. Please allow microphone permission and reload the page.");
+    } else if (event.error === "network") {
+      setAiText("Network hiccup detected in voice recognition. Retrying...");
     }
   };
 
@@ -203,7 +207,6 @@ useEffect(() => {
     const assistantName = userData?.assistantName?.toLowerCase() || "jarvis";
     const lowerTranscript = transcript.toLowerCase();
 
-    // Check if transcript contains assistant name ("Jarvis" or custom assistant name)
     const hasWakeWord = lowerTranscript.includes(assistantName) || lowerTranscript.includes("jarvis") || lowerTranscript.includes("जार्विस");
 
     if (!hasWakeWord) {
