@@ -6,20 +6,26 @@ const geminiResponse = async (command, assistantName, userName) => {
     const apiKey = process.env.GEMINI_API_KEY || (legacyUrlOrKey && !legacyUrlOrKey.startsWith("http") ? legacyUrlOrKey : undefined)
     
     let configuredModel = process.env.GEMINI_MODEL || "gemini-3.6-flash"
-    const modelsToTry = [configuredModel, "gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash"]
+    const modelsToTry = [
+      configuredModel,
+      "gemini-3.6-flash",
+      "gemini-flash-latest",
+      "gemini-2.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-3.5-flash"
+    ]
     const uniqueModels = [...new Set(modelsToTry.filter(Boolean))]
 
-    // Concise, speed-optimized system prompt
-    const prompt = `You are voice assistant ${assistantName} created by ${userName}.
-Respond ONLY with a JSON object format:
+    const prompt = `You are a voice assistant named ${assistantName} created by ${userName}.
+Classify the intent and respond in JSON format ONLY:
 {
   "type": "general" | "google-search" | "youtube-search" | "youtube-play" | "get-time" | "get-date" | "get-day" | "get-month" | "calculator-open" | "instagram-open" | "facebook-open" | "weather-show" | "website-open",
   "userInput": "${command}",
-  "response": "<short 1-sentence spoken answer>",
-  "targetUrl": "<https URL if type is website-open>"
+  "response": "<short spoken response>",
+  "targetUrl": "<https URL if website-open>"
 }
 
-Command: ${command}`
+User input: ${command}`
 
     let lastError = null
     for (const model of uniqueModels) {
@@ -37,7 +43,7 @@ Command: ${command}`
             ],
             generationConfig: {
               responseMimeType: "application/json",
-              maxOutputTokens: 120,
+              maxOutputTokens: 350,
               temperature: 0.2
             }
           },
@@ -50,11 +56,11 @@ Command: ${command}`
         }
       } catch (err) {
         lastError = err
-        console.warn(`Model ${model} failed, trying next fallback...`, err.response?.data?.error?.message || err.message)
+        console.warn(`Model ${model} rate-limited/failed, trying next model...`, err.response?.data?.error?.message || err.message)
       }
     }
 
-    throw lastError || new Error("All Gemini models failed")
+    throw lastError || new Error("All Gemini models rate limited")
   } catch (error) {
     console.error("Gemini API Error Detail:", error.response?.data || error.message)
     throw new Error(`Gemini request failed: ${error.response?.data?.error?.message || error.message}`)

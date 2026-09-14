@@ -61,8 +61,8 @@ export const updateAssistant = async (req, res) => {
 // ================= ASK TO ASSISTANT =================
 
 export const askToAssistant = async (req, res) => {
+   const { command } = req.body || {}
    try {
-      const { command } = req.body
       const user = await User.findById(req.userId)
 
       if (!user) {
@@ -139,28 +139,34 @@ export const askToAssistant = async (req, res) => {
          })
       }
 
-      // ================= AI GENERATION (SPEED OPTIMIZED) =================
+      // ================= AI GENERATION (SPEED & RATE-LIMIT OPTIMIZED) =================
       const result = await geminiResponse(command, assistantName, userName)
 
       let gemResult = null
-      const jsonMatch = result?.match(/{[\s\S]*}/)
-      
-      if (jsonMatch) {
-         try {
-            gemResult = JSON.parse(jsonMatch[0])
-         } catch {
-            // fallback
+      try {
+         const cleanString = result ? result.trim() : ""
+         gemResult = JSON.parse(cleanString)
+      } catch {
+         const jsonMatch = result?.match(/{[\s\S]*}/)
+         if (jsonMatch) {
+            try {
+               gemResult = JSON.parse(jsonMatch[0])
+            } catch {
+               gemResult = null
+            }
          }
       }
 
-      if (!gemResult) {
+      if (!gemResult || !gemResult.response || gemResult.response.trim() === "{" || gemResult.response.trim() === "}") {
          const isWebsiteQuery = /open|khol|khola/i.test(command)
          const queryName = command.replace(/jarvis|open|khol|khola/gi, "").trim()
-         
+         const cleanText = result ? result.replace(/```json|```|[{}]/g, "").trim() : ""
+         const safeResponse = (cleanText && cleanText.length > 3) ? cleanText : `Here is what I found for ${command}`
+
          gemResult = {
             type: isWebsiteQuery ? "website-open" : "general",
             userInput: command,
-            response: result ? result.replace(/```json|```/g, "").trim() : `Opening ${queryName || "website"} for you.`,
+            response: safeResponse,
             targetUrl: `https://www.google.com/search?q=${encodeURIComponent(queryName || command)}`
          }
       }
@@ -208,7 +214,7 @@ export const askToAssistant = async (req, res) => {
             return res.json({
                type,
                userInput: gemResult.userInput || command,
-               response: gemResult.response || "Sure, processing your request.",
+               response: gemResult.response,
                targetUrl: gemResult.targetUrl || (type === "website-open" ? `https://www.google.com/search?q=${encodeURIComponent(gemResult.userInput || command)}` : undefined)
             })
 
@@ -216,14 +222,20 @@ export const askToAssistant = async (req, res) => {
             return res.json({
                type: "general",
                userInput: gemResult.userInput || command,
-               response: gemResult.response || "I am processing your command.",
+               response: gemResult.response || `Here is what I found for ${command}`,
                targetUrl: gemResult.targetUrl
             })
       }
    } catch (error) {
-      console.error("Assistant Error:", error.message)
-      return res.status(500).json({
-         response: "Assistant service is unavailable. Please try again."
+      console.error("Assistant Error Graceful Fallback:", error.message)
+      const isWebsiteQuery = /open|khol|khola/i.test(command || "")
+      const queryName = (command || "").replace(/jarvis|open|khol|khola/gi, "").trim()
+
+      return res.json({
+         type: isWebsiteQuery ? "website-open" : "google-search",
+         userInput: command || "",
+         response: `Here is what I found for ${queryName || command || "your request"}`,
+         targetUrl: `https://www.google.com/search?q=${encodeURIComponent(queryName || command || "")}`
       })
    }
 }
