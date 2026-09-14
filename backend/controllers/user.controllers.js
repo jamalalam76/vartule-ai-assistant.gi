@@ -62,10 +62,6 @@ export const updateAssistant = async (req, res) => {
 
 export const askToAssistant = async (req, res) => {
    try {
-      console.log("========== ASSISTANT REQUEST ==========")
-      console.log("Body:", req.body)
-      console.log("User ID:", req.userId)
-
       const { command } = req.body
       const user = await User.findById(req.userId)
 
@@ -80,18 +76,71 @@ export const askToAssistant = async (req, res) => {
 
       const userName = user.name
       const assistantName = user.assistantName || "Jarvis"
+      const lowerCmd = (command || "").toLowerCase().trim()
 
-      console.log("User name:", userName)
-      console.log("Assistant name:", assistantName)
-      console.log("Sending command to Gemini:", command)
+      // ================= INSTANT 0ms SHORTCUT ROUTING =================
+      if (/youtube|युटुब|यूट्यूब/i.test(lowerCmd) && /open|khol|khola|play|chala/i.test(lowerCmd)) {
+         const searchQuery = command.replace(/jarvis|open|khol|khola|play|chala|youtube|युटुब|यूट्यूब/gi, "").trim()
+         return res.json({
+            type: searchQuery ? "youtube-search" : "website-open",
+            userInput: searchQuery || command,
+            response: searchQuery ? `Playing ${searchQuery} on YouTube.` : "Opening YouTube for you.",
+            targetUrl: "https://www.youtube.com"
+         })
+      }
+      if (/google|गूगल/i.test(lowerCmd) && /open|khol|khola/i.test(lowerCmd)) {
+         return res.json({
+            type: "website-open",
+            userInput: command,
+            response: "Opening Google for you.",
+            targetUrl: "https://www.google.com"
+         })
+      }
+      if (/instagram/i.test(lowerCmd) && /open|khol|khola/i.test(lowerCmd)) {
+         return res.json({
+            type: "instagram-open",
+            userInput: command,
+            response: "Opening Instagram."
+         })
+      }
+      if (/facebook/i.test(lowerCmd) && /open|khol|khola/i.test(lowerCmd)) {
+         return res.json({
+            type: "facebook-open",
+            userInput: command,
+            response: "Opening Facebook."
+         })
+      }
+      if (/calculator/i.test(lowerCmd) && /open|khol|khola/i.test(lowerCmd)) {
+         return res.json({
+            type: "calculator-open",
+            userInput: command,
+            response: "Opening Calculator."
+         })
+      }
+      if (/weather|mausam/i.test(lowerCmd)) {
+         return res.json({
+            type: "weather-show",
+            userInput: command,
+            response: "Showing current weather."
+         })
+      }
+      if (/time|samay|waqt/i.test(lowerCmd) && /what|batao|kya|kya hai/i.test(lowerCmd)) {
+         return res.json({
+            type: "get-time",
+            userInput: command,
+            response: `Current time is ${moment().format("hh:mm A")}`
+         })
+      }
+      if (/date|tareekh/i.test(lowerCmd) && /what|batao|kya|kya hai/i.test(lowerCmd)) {
+         return res.json({
+            type: "get-date",
+            userInput: command,
+            response: `Current date is ${moment().format("YYYY-MM-DD")}`
+         })
+      }
 
-      const result = await geminiResponse(
-         command,
-         assistantName,
-         userName
-      )
-
-      console.log("Gemini result:", result)
+      // ================= AI GENERATION (SPEED OPTIMIZED) =================
+      const result = await geminiResponse(command, assistantName, userName)
 
       let gemResult = null
       const jsonMatch = result?.match(/{[\s\S]*}/)
@@ -99,23 +148,19 @@ export const askToAssistant = async (req, res) => {
       if (jsonMatch) {
          try {
             gemResult = JSON.parse(jsonMatch[0])
-         } catch (parseErr) {
-            console.warn("JSON parse failed, using raw response fallback:", parseErr.message)
+         } catch {
+            // fallback
          }
       }
 
-      // Safe fallback if Gemini returned non-JSON prose text
       if (!gemResult) {
-         const cleanText = result ? result.replace(/```json|```/g, "").trim() : "I found some information for you."
-         
-         // Detect if command is asking to open a website
-         const isWebsiteQuery = /open|khol|banao/i.test(command)
-         const queryName = command.replace(/jarvis|open|khol|banao/gi, "").trim()
+         const isWebsiteQuery = /open|khol|khola/i.test(command)
+         const queryName = command.replace(/jarvis|open|khol|khola/gi, "").trim()
          
          gemResult = {
             type: isWebsiteQuery ? "website-open" : "general",
             userInput: command,
-            response: `Opening ${queryName || "website"} for you.`,
+            response: result ? result.replace(/```json|```/g, "").trim() : `Opening ${queryName || "website"} for you.`,
             targetUrl: `https://www.google.com/search?q=${encodeURIComponent(queryName || command)}`
          }
       }
@@ -168,7 +213,6 @@ export const askToAssistant = async (req, res) => {
             })
 
          default:
-            console.log("Fallback Gemini response for type:", type)
             return res.json({
                type: "general",
                userInput: gemResult.userInput || command,
@@ -177,8 +221,7 @@ export const askToAssistant = async (req, res) => {
             })
       }
    } catch (error) {
-      console.error("========== ASSISTANT ERROR ==========")
-      console.error(error.message)
+      console.error("Assistant Error:", error.message)
       return res.status(500).json({
          response: "Assistant service is unavailable. Please try again."
       })
